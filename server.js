@@ -28,23 +28,22 @@ app.get("/", (req, res) => {
    SEND ORDER API
 ========================= */
 app.post("/send-order", async (req, res) => {
-  try {
-    const {
-      orderId,
-      name,
-      product,
-      plan,
-      price,
-      payment,
-      platform,
-      email
-    } = req.body;
+  const {
+    orderId,
+    name,
+    product,
+    plan,
+    price,
+    payment,
+    platform,
+    email
+  } = req.body;
 
-    if (!orderId || !name || !product) {
-      return res.status(400).json({ success: false });
-    }
+  if (!orderId || !name || !product) {
+    return res.status(400).json({ success: false });
+  }
 
-    const message = `
+  const message = `
 🛒 NEW ORDER
 
 🆔 Order ID: ${orderId}
@@ -58,31 +57,24 @@ app.post("/send-order", async (req, res) => {
 🕒 Time: ${new Date().toLocaleString("en-IN")}
 `;
 
-    // 🔐 Send Telegram messages safely (with timeout protection)
-    for (const chatId of CHAT_IDS) {
-      try {
-        await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            chat_id: chatId.trim(),
-            text: message
-          }),
-          timeout: 5000
-        });
-      } catch (tgErr) {
-        console.error("Telegram error for chat:", chatId, tgErr);
-      }
-    }
+  // 🔐 Send Telegram safely (never block response)
+  CHAT_IDS.forEach(chatId => {
+    fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId.trim(),
+        text: message
+      })
+    }).catch(err => {
+      console.error("Telegram error:", err);
+    });
+  });
 
-    // ✅ ALWAYS respond to frontend
-    return res.json({ success: true });
-
-  } catch (err) {
-    console.error("ORDER ERROR:", err);
-    return res.status(500).json({ success: false });
-  }
+  // ✅ RESPOND IMMEDIATELY (THIS FIXES EVERYTHING)
+  return res.json({ success: true });
 });
+
 
 
 /* =========================
@@ -92,4 +84,5 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Backend running on port ${PORT}`);
 });
+
 
