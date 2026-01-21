@@ -40,11 +40,8 @@ app.post("/send-order", async (req, res) => {
       email
     } = req.body;
 
-    if (!orderId || !name || !product || !price) {
-      return res.status(400).json({
-        success: false,
-        message: "Missing required fields"
-      });
+    if (!orderId || !name || !product) {
+      return res.status(400).json({ success: false });
     }
 
     const message = `
@@ -54,35 +51,36 @@ app.post("/send-order", async (req, res) => {
 👤 Name: ${name}
 📦 Product: ${product}
 📋 Plan: ${plan || "N/A"}
-💰 Price: ${price}
+💰 Price: ${price || "N/A"}
 💳 Payment: ${payment || "N/A"}
 📧 Email: ${email || "N/A"}
 🧭 Buy Via: ${platform || "N/A"}
 🕒 Time: ${new Date().toLocaleString("en-IN")}
 `;
 
+    // 🔐 Send Telegram messages safely (with timeout protection)
     for (const chatId of CHAT_IDS) {
-      await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chat_id: chatId.trim(),
-          text: message
-        })
-      });
+      try {
+        await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: chatId.trim(),
+            text: message
+          }),
+          timeout: 5000
+        });
+      } catch (tgErr) {
+        console.error("Telegram error for chat:", chatId, tgErr);
+      }
     }
 
-    // ✅ ALWAYS respond
+    // ✅ ALWAYS respond to frontend
     return res.json({ success: true });
 
-  } catch (error) {
-    console.error("ORDER ERROR:", error);
-
-    // ✅ ALWAYS respond even on error
-    return res.status(500).json({
-      success: false,
-      message: "Server error"
-    });
+  } catch (err) {
+    console.error("ORDER ERROR:", err);
+    return res.status(500).json({ success: false });
   }
 });
 
@@ -94,3 +92,4 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Backend running on port ${PORT}`);
 });
+
