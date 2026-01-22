@@ -10,31 +10,32 @@ app.use(cors());
 app.use(express.json());
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
-const CHAT_IDS = process.env.CHAT_IDS.split(",");
+const CHAT_IDS = process.env.CHAT_IDS?.split(",") || [];
 
 /* Health check */
 app.get("/", (req, res) => {
-  res.send("✅ Delta Market Backend Running");
+  res.send("✅ Backend running");
 });
 
-/* FINAL SEND ORDER */
+/* ORDER API */
 app.post("/send-order", (req, res) => {
   const { orderId, name, product, email, payment, platform } = req.body;
 
   if (!orderId || !name || !product) {
-    return res.json({ success: false });
+    return res.status(400).json({ success: false });
   }
 
-  const message =
-`🛒 NEW ORDER
+  const message = `
+🛒 NEW ORDER
+🆔 ${orderId}
+👤 ${name}
+📦 ${product}
+📧 ${email}
+💳 ${payment}
+📲 ${platform}
+`;
 
-🆔 Order ID: ${orderId}
-👤 Name: ${name}
-📦 Product: ${product}
-📧 Email: ${email || "N/A"}
-💳 Payment: ${payment || "N/A"}
-🧭 Platform: ${platform || "N/A"}`;
-
+  // Telegram send (NON BLOCKING)
   CHAT_IDS.forEach(id => {
     fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
       method: "POST",
@@ -46,10 +47,11 @@ app.post("/send-order", (req, res) => {
     }).catch(() => {});
   });
 
-  return res.json({ success: true });
+  // ALWAYS respond
+  res.json({ success: true });
 });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log("🚀 Backend running on port " + PORT);
+  console.log("🚀 Server running on port", PORT);
 });
