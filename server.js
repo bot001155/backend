@@ -138,7 +138,7 @@ async function sendReceipt(order) {
   await resend.emails.send({
     from: process.env.MAIL_FROM,
     to: order.email,
-    subject: "Purchase Receipt",
+    subject: "Delta Market • Payment Receipt",
     html: `
 <!DOCTYPE html>
 <html>
@@ -192,7 +192,7 @@ async function sendReceipt(order) {
 
               <p style="font-size:13px; color:#666; margin:0;">
                 If you have any issues, contact us at<br>
-                <b>support@deltamarket.store</b>
+                <b>deltamarket015@gmail.com</b>
               </p>
             </td>
           </tr>
@@ -312,4 +312,5 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log("🚀 Server running on port", PORT);
 });
+
 
