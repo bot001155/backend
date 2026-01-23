@@ -17,15 +17,24 @@ const otpStore = {};     // { email: otp }
 const orderStore = {};   // { orderId: order }
 
 /* =====================
-   EMAIL (GMAIL SMTP – STABLE)
+   EMAIL (OUTLOOK SMTP – FIXED)
 ===================== */
 const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 465,
-  secure: true,
+  host: process.env.MAIL_HOST,          // smtp.office365.com
+  port: Number(process.env.MAIL_PORT),  // 587
+  secure: false,
   auth: {
-    user: process.env.MAIL_USER,
-    pass: process.env.MAIL_PASS
+    user: process.env.MAIL_USER,        // outlook email
+    pass: process.env.MAIL_PASS         // outlook APP password
+  }
+});
+
+// 🔍 Verify mail server on startup
+transporter.verify((err) => {
+  if (err) {
+    console.error("❌ OUTLOOK MAIL ERROR:", err);
+  } else {
+    console.log("✅ Outlook mail server ready");
   }
 });
 
@@ -48,7 +57,7 @@ app.post("/send-otp", async (req, res) => {
     otpStore[email] = otp;
 
     await transporter.sendMail({
-      from: `"Delta Market" <${process.env.MAIL_USER}>`,
+      from: `Delta Market <${process.env.MAIL_FROM}>`,
       to: email,
       subject: "Your OTP Code",
       text: `Your OTP is: ${otp}`
@@ -90,7 +99,7 @@ app.post("/verify-otp", async (req, res) => {
 
     orderStore[orderId] = order;
 
-    // Send to Telegram (NON-BLOCKING)
+    // 📩 Send to Telegram admins (NON-BLOCKING)
     if (process.env.BOT_TOKEN && process.env.CHAT_IDS) {
       process.env.CHAT_IDS.split(",").forEach(id => {
         fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`, {
@@ -133,7 +142,7 @@ app.post("/order-done", async (req, res) => {
     order.status = "completed";
 
     await transporter.sendMail({
-      from: `"Delta Market" <${process.env.MAIL_USER}>`,
+      from: `Delta Market <${process.env.MAIL_FROM}>`,
       to: order.email,
       subject: "Purchase Receipt",
       text:
@@ -154,5 +163,10 @@ Status: COMPLETED
   }
 });
 
+/* =====================
+   START SERVER
+===================== */
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("🚀 Server running on port", PORT));
+app.listen(PORT, () => {
+  console.log("🚀 Server running on port", PORT);
+});
