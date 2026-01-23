@@ -34,7 +34,7 @@ app.get("/", (req, res) => {
 app.post("/send-otp", async (req, res) => {
   try {
     const { email } = req.body;
-    if (!email) return res.status(400).json({ success: false });
+    if (!email) return res.status(400).json({ success: false, message: "Email required" });
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
@@ -60,7 +60,7 @@ app.post("/send-otp", async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     console.error("SEND OTP ERROR:", err);
-    res.status(500).json({ success: false });
+    res.status(500).json({ success: false, message: "Server error" });
   }
 });
 
@@ -71,18 +71,18 @@ app.post("/verify-otp", async (req, res) => {
   try {
     const { email, otp, orderData } = req.body;
     if (!email || !otp || !orderData) {
-      return res.status(400).json({ success: false });
+      return res.status(400).json({ success: false, message: "Missing data" });
     }
 
     const record = otpStore[email];
-    if (!record) return res.json({ success: false });
+    if (!record) return res.json({ success: false, message: "OTP not found" });
 
     if (record.expires < Date.now()) {
       delete otpStore[email];
-      return res.json({ success: false });
+      return res.json({ success: false, message: "OTP expired" });
     }
 
-    if (record.otp !== otp) return res.json({ success: false });
+    if (record.otp !== otp) return res.json({ success: false, message: "Wrong OTP" });
 
     delete otpStore[email];
 
@@ -127,7 +127,7 @@ app.post("/verify-otp", async (req, res) => {
     res.json({ success: true, orderId });
   } catch (err) {
     console.error("VERIFY OTP ERROR:", err);
-    res.status(500).json({ success: false });
+    res.status(500).json({ success: false, message: "Server error" });
   }
 });
 
@@ -168,7 +168,7 @@ app.post("/order-done", async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     console.error("RECEIPT ERROR:", err);
-    res.status(500).json({ success: false });
+    res.status(500).json({ success: false, message: "Server error" });
   }
 });
 
