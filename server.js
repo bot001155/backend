@@ -140,16 +140,78 @@ async function sendReceipt(order) {
     to: order.email,
     subject: "Purchase Receipt",
     html: `
-      <div style="font-family:Arial">
-        <h2>✅ Purchase Successful</h2>
-        <p><b>Order ID:</b> ${order.orderId}</p>
-        <p><b>Product:</b> ${order.product}</p>
-        <p><b>Payment:</b> ${order.payment}</p>
-        <p><b>Status:</b> Completed</p>
-        <br>
-        <p>Thank you for shopping with Delta Market.</p>
-      </div>
-    `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Payment Receipt</title>
+</head>
+<body style="margin:0; padding:0; background:#f4f6f8; font-family:Arial, Helvetica, sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0">
+    <tr>
+      <td align="center" style="padding:30px 10px;">
+        <table width="100%" style="max-width:520px; background:#ffffff; border-radius:12px; overflow:hidden; box-shadow:0 4px 14px rgba(0,0,0,0.08);">
+          
+          <!-- HEADER -->
+          <tr>
+            <td align="center" style="padding:25px; background:#111;">
+              <img src="https://deltamarket.store/logo.png" width="70" style="border-radius:12px;" />
+              <h2 style="color:#fff; margin:12px 0 0;">Delta Market</h2>
+              <p style="color:#bbb; font-size:13px; margin:4px 0 0;">Payment Receipt</p>
+            </td>
+          </tr>
+
+          <!-- BODY -->
+          <tr>
+            <td style="padding:25px;">
+              <h3 style="margin:0 0 10px; color:#111;">✅ Payment Successful</h3>
+              <p style="color:#555; font-size:14px; margin:0 0 20px;">
+                Thank you for your purchase. Your order has been successfully completed.
+              </p>
+
+              <table width="100%" style="font-size:14px; color:#333;">
+                <tr>
+                  <td style="padding:6px 0;"><b>Order ID</b></td>
+                  <td align="right">${order.orderId}</td>
+                </tr>
+                <tr>
+                  <td style="padding:6px 0;"><b>Product</b></td>
+                  <td align="right">${order.product}</td>
+                </tr>
+                <tr>
+                  <td style="padding:6px 0;"><b>Payment Method</b></td>
+                  <td align="right">${order.payment}</td>
+                </tr>
+                <tr>
+                  <td style="padding:6px 0;"><b>Status</b></td>
+                  <td align="right" style="color:green;"><b>Completed</b></td>
+                </tr>
+              </table>
+
+              <hr style="margin:20px 0; border:none; border-top:1px solid #eee;" />
+
+              <p style="font-size:13px; color:#666; margin:0;">
+                If you have any issues, contact us at<br>
+                <b>support@deltamarket.store</b>
+              </p>
+            </td>
+          </tr>
+
+          <!-- FOOTER -->
+          <tr>
+            <td align="center" style="padding:15px; background:#fafafa; font-size:12px; color:#999;">
+              © ${new Date().getFullYear()} Delta Market. All rights reserved.
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+`
+
   });
 }
 
@@ -250,3 +312,4 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log("🚀 Server running on port", PORT);
 });
+
