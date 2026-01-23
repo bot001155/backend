@@ -109,13 +109,14 @@ app.post("/verify-otp", async (req, res) => {
             chat_id: id.trim(),
             text:
 `🛒 NEW ORDER
-🆔 ${orderId}
-👤 ${order.name}
-📦 ${order.product}
-📧 ${order.email}
-💳 ${order.payment}
-📲 ${order.platform}
-🕒 ${order.time}
+
+🆔 Order ID: ${orderId}
+👤 Name: ${order.name}
+📦 Product: ${order.product}
+📧 Email: ${order.email}
+💳 Payment: ${order.payment}
+📲 Platform: ${order.platform}
+🕒 Date & Time: ${order.time}
 
 (Admin: send /done ${orderId})`
           })
@@ -172,3 +173,4 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log("🚀 Server running on port", PORT);
 });
+
