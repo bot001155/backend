@@ -46,15 +46,82 @@ app.post("/send-otp", async (req, res) => {
     await resend.emails.send({
       from: process.env.MAIL_FROM,
       to: email,
-      subject: "Your OTP Code",
-      html: `
-        <div style="font-family:Arial">
-          <h2>Delta Market</h2>
-          <p>Your OTP code is:</p>
-          <h1>${otp}</h1>
-          <p>This OTP is valid for 5 minutes.</p>
-        </div>
-      `
+      subject: "Delta Market • OTP Verification Code",
+     html: `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="color-scheme" content="dark">
+  <meta name="supported-color-schemes" content="dark">
+</head>
+
+<body style="margin:0; padding:0; background:#0b0f14; font-family:Arial, Helvetica, sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0b0f14;">
+    <tr>
+      <td align="center" style="padding:35px 12px;">
+        
+        <table width="100%" style="max-width:520px; background:#111827; border-radius:16px; overflow:hidden; border:1px solid rgba(255,255,255,0.08);">
+          
+          <!-- HEADER -->
+          <tr>
+            <td style="padding:22px; text-align:center; background:#0f172a;">
+              <img src="https://deltamarket.store/logo.png" width="70"
+                style="border-radius:14px; display:block; margin:0 auto 10px;" />
+              
+              <div style="color:#ffffff; font-size:20px; font-weight:700;">
+                Delta Market
+              </div>
+              <div style="color:#9ca3af; font-size:13px; margin-top:4px;">
+                Secure OTP Verification
+              </div>
+            </td>
+          </tr>
+
+          <!-- BODY -->
+          <tr>
+            <td style="padding:22px;">
+              <div style="color:#ffffff; font-size:16px; font-weight:700;">
+                Your OTP Code
+              </div>
+
+              <div style="margin-top:8px; color:#9ca3af; font-size:13px; line-height:1.6;">
+                Use the OTP below to verify your email and complete your order.
+              </div>
+
+              <!-- OTP BOX -->
+              <div style="margin-top:18px; padding:16px; background:#0b1220; border-radius:14px; text-align:center; border:1px solid rgba(255,255,255,0.08);">
+                <div style="font-size:30px; font-weight:800; letter-spacing:8px; color:#ffffff;">
+                  ${otp}
+                </div>
+                <div style="margin-top:10px; font-size:12px; color:#9ca3af;">
+                  This code expires in <b style="color:#ffffff;">5 minutes</b>.
+                </div>
+              </div>
+
+              <!-- WARNING -->
+              <div style="margin-top:18px; font-size:12px; color:#9ca3af; line-height:1.6;">
+                If you don’t want to Buy, Then Don't Verify .
+              </div>
+            </td>
+          </tr>
+
+          <!-- FOOTER -->
+          <tr>
+            <td style="padding:14px; text-align:center; background:#0f172a; font-size:12px; color:#6b7280;">
+              © ${new Date().getFullYear()} Delta Market • Secure Checkout
+            </td>
+          </tr>
+
+        </table>
+
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+`
+
     });
 
     res.json({ success: true });
@@ -143,64 +210,64 @@ async function sendReceipt(order) {
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8">
-  <title>Payment Receipt</title>
+  <meta charset="UTF-8" />
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
 </head>
 <body style="margin:0; padding:0; background:#f4f6f8; font-family:Arial, Helvetica, sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f8;">
     <tr>
       <td align="center" style="padding:30px 10px;">
-        <table width="100%" style="max-width:520px; background:#ffffff; border-radius:12px; overflow:hidden; box-shadow:0 4px 14px rgba(0,0,0,0.08);">
+        <table width="100%" style="max-width:520px; background:#ffffff; border-radius:14px; overflow:hidden; border:1px solid #eaeaea;">
           
-          <!-- HEADER -->
+          <!-- Header -->
           <tr>
-            <td align="center" style="padding:25px; background:#111;">
-              <img src="https://deltamarket.store/logo.png" width="70" style="border-radius:12px;" />
-              <h2 style="color:#fff; margin:12px 0 0;">Delta Market</h2>
-              <p style="color:#bbb; font-size:13px; margin:4px 0 0;">Payment Receipt</p>
+            <td style="padding:22px; background:#111; text-align:center;">
+              <img src="https://deltamarket.store/logo.png" width="70" style="border-radius:14px; display:block; margin:0 auto 10px;" />
+              <div style="color:#fff; font-size:20px; font-weight:bold;">Delta Market</div>
+              <div style="color:#cfcfcf; font-size:13px; margin-top:4px;">Payment Receipt</div>
             </td>
           </tr>
 
-          <!-- BODY -->
+          <!-- Body -->
           <tr>
-            <td style="padding:25px;">
-              <h3 style="margin:0 0 10px; color:#111;">✅ Payment Successful</h3>
-              <p style="color:#555; font-size:14px; margin:0 0 20px;">
-                Thank you for your purchase. Your order has been successfully completed.
-              </p>
+            <td style="padding:22px;">
+              <div style="font-size:16px; font-weight:bold; color:#111;">✅ Payment Successful</div>
+              <div style="margin-top:8px; font-size:13px; color:#555; line-height:1.5;">
+                Thank you for your purchase. Your order is completed successfully.
+              </div>
 
-              <table width="100%" style="font-size:14px; color:#333;">
-                <tr>
-                  <td style="padding:6px 0;"><b>Order ID</b></td>
-                  <td align="right">${order.orderId}</td>
-                </tr>
-                <tr>
-                  <td style="padding:6px 0;"><b>Product</b></td>
-                  <td align="right">${order.product}</td>
-                </tr>
-                <tr>
-                  <td style="padding:6px 0;"><b>Payment Method</b></td>
-                  <td align="right">${order.payment}</td>
-                </tr>
-                <tr>
-                  <td style="padding:6px 0;"><b>Status</b></td>
-                  <td align="right" style="color:green;"><b>Completed</b></td>
-                </tr>
-              </table>
+              <div style="margin-top:18px; padding:14px; background:#f7f7f7; border-radius:12px;">
+                <table width="100%" style="font-size:13px; color:#222;">
+                  <tr>
+                    <td style="padding:6px 0;"><b>Order ID</b></td>
+                    <td align="right">${order.orderId}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:6px 0;"><b>Product</b></td>
+                    <td align="right">${order.product}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:6px 0;"><b>Payment</b></td>
+                    <td align="right">${order.payment}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:6px 0;"><b>Status</b></td>
+                    <td align="right" style="color:#16a34a;"><b>Completed</b></td>
+                  </tr>
+                </table>
+              </div>
 
-              <hr style="margin:20px 0; border:none; border-top:1px solid #eee;" />
-
-              <p style="font-size:13px; color:#666; margin:0;">
-                If you have any issues, contact us at<br>
-                <b>deltamarket015@gmail.com</b>
-              </p>
+              <div style="margin-top:18px; font-size:12px; color:#666; line-height:1.5;">
+                Need help? Contact us at <b>deltamarket015@gmail.com</b>
+              </div>
             </td>
           </tr>
 
-          <!-- FOOTER -->
+          <!-- Footer -->
           <tr>
-            <td align="center" style="padding:15px; background:#fafafa; font-size:12px; color:#999;">
-              © ${new Date().getFullYear()} Delta Market. All rights reserved.
+            <td style="padding:14px; text-align:center; background:#fafafa; font-size:12px; color:#888;">
+              © ${new Date().getFullYear()} Delta Market • All rights reserved
             </td>
           </tr>
 
@@ -312,5 +379,6 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log("🚀 Server running on port", PORT);
 });
+
 
 
