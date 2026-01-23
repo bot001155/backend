@@ -1,8 +1,8 @@
 import express from "express";
 import cors from "cors";
 import fetch from "node-fetch";
-import nodemailer from "nodemailer";
 import dotenv from "dotenv";
+import { Resend } from "resend";
 
 dotenv.config();
 
@@ -10,69 +10,63 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-/* =====================
-   TEMP STORES (IN-MEMORY)
-===================== */
-const otpStore = {};     // { email: otp }
-const orderStore = {};   // { orderId: order }
+/* =========================
+   RESEND SETUP
+========================= */
+const resend = new Resend(process.env.RESEND_API_KEY);
 
-/* =====================
-   EMAIL (OUTLOOK SMTP – FIXED)
-===================== */
-const transporter = nodemailer.createTransport({
-  host: process.env.MAIL_HOST,          // smtp.office365.com
-  port: Number(process.env.MAIL_PORT),  // 587
-  secure: false,
-  auth: {
-    user: process.env.MAIL_USER,        // outlook email
-    pass: process.env.MAIL_PASS         // outlook APP password
-  }
-});
+/* =========================
+   TEMP IN-MEMORY STORES
+========================= */
+const otpStore = {};    // { email: { otp, expires } }
+const orderStore = {}; // { orderId: order }
 
-// 🔍 Verify mail server on startup
-transporter.verify((err) => {
-  if (err) {
-    console.error("❌ OUTLOOK MAIL ERROR:", err);
-  } else {
-    console.log("✅ Outlook mail server ready");
-  }
-});
-
-/* =====================
+/* =========================
    HEALTH CHECK
-===================== */
+========================= */
 app.get("/", (req, res) => {
   res.send("✅ Backend running");
 });
 
-/* =====================
+/* =========================
    SEND OTP
-===================== */
+========================= */
 app.post("/send-otp", async (req, res) => {
   try {
     const { email } = req.body;
     if (!email) return res.status(400).json({ success: false });
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    otpStore[email] = otp;
 
-    await transporter.sendMail({
-      from: `Delta Market <${process.env.MAIL_FROM}>`,
+    otpStore[email] = {
+      otp,
+      expires: Date.now() + 5 * 60 * 1000 // 5 minutes
+    };
+
+    await resend.emails.send({
+      from: process.env.MAIL_FROM,
       to: email,
       subject: "Your OTP Code",
-      text: `Your OTP is: ${otp}`
+      html: `
+        <div style="font-family:Arial">
+          <h2>Delta Market</h2>
+          <p>Your OTP code is:</p>
+          <h1>${otp}</h1>
+          <p>This OTP is valid for 5 minutes.</p>
+        </div>
+      `
     });
 
-    return res.json({ success: true });
-  } catch (e) {
-    console.error("SEND OTP ERROR:", e);
-    return res.status(500).json({ success: false });
+    res.json({ success: true });
+  } catch (err) {
+    console.error("SEND OTP ERROR:", err);
+    res.status(500).json({ success: false });
   }
 });
 
-/* =====================
-   VERIFY OTP → CREATE ORDER → TELEGRAM
-===================== */
+/* =========================
+   VERIFY OTP + CREATE ORDER
+========================= */
 app.post("/verify-otp", async (req, res) => {
   try {
     const { email, otp, orderData } = req.body;
@@ -80,9 +74,15 @@ app.post("/verify-otp", async (req, res) => {
       return res.status(400).json({ success: false });
     }
 
-    if (otpStore[email] !== otp) {
+    const record = otpStore[email];
+    if (!record) return res.json({ success: false });
+
+    if (record.expires < Date.now()) {
+      delete otpStore[email];
       return res.json({ success: false });
     }
+
+    if (record.otp !== otp) return res.json({ success: false });
 
     delete otpStore[email];
 
@@ -99,7 +99,7 @@ app.post("/verify-otp", async (req, res) => {
 
     orderStore[orderId] = order;
 
-    // 📩 Send to Telegram admins (NON-BLOCKING)
+    /* SEND TO TELEGRAM ADMINS */
     if (process.env.BOT_TOKEN && process.env.CHAT_IDS) {
       process.env.CHAT_IDS.split(",").forEach(id => {
         fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`, {
@@ -123,16 +123,16 @@ app.post("/verify-otp", async (req, res) => {
       });
     }
 
-    return res.json({ success: true, orderId });
-  } catch (e) {
-    console.error("VERIFY OTP ERROR:", e);
-    return res.status(500).json({ success: false });
+    res.json({ success: true, orderId });
+  } catch (err) {
+    console.error("VERIFY OTP ERROR:", err);
+    res.status(500).json({ success: false });
   }
 });
 
-/* =====================
+/* =========================
    ADMIN DONE → SEND RECEIPT
-===================== */
+========================= */
 app.post("/order-done", async (req, res) => {
   try {
     const { orderId } = req.body;
@@ -141,31 +141,33 @@ app.post("/order-done", async (req, res) => {
 
     order.status = "completed";
 
-    await transporter.sendMail({
-      from: `Delta Market <${process.env.MAIL_FROM}>`,
+    await resend.emails.send({
+      from: process.env.MAIL_FROM,
       to: order.email,
       subject: "Purchase Receipt",
-      text:
-`Thank you for your purchase!
-
-Order ID: ${order.orderId}
-Product: ${order.product}
-Payment: ${order.payment}
-Status: COMPLETED
-
-— Delta Market`
+      html: `
+        <div style="font-family:Arial">
+          <h2>✅ Purchase Successful</h2>
+          <p><b>Order ID:</b> ${order.orderId}</p>
+          <p><b>Product:</b> ${order.product}</p>
+          <p><b>Payment:</b> ${order.payment}</p>
+          <p><b>Status:</b> Completed</p>
+          <br>
+          <p>Thank you for shopping with Delta Market.</p>
+        </div>
+      `
     });
 
-    return res.json({ success: true });
-  } catch (e) {
-    console.error("ORDER DONE ERROR:", e);
-    return res.status(500).json({ success: false });
+    res.json({ success: true });
+  } catch (err) {
+    console.error("RECEIPT ERROR:", err);
+    res.status(500).json({ success: false });
   }
 });
 
-/* =====================
+/* =========================
    START SERVER
-===================== */
+========================= */
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log("🚀 Server running on port", PORT);
