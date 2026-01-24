@@ -29,12 +29,16 @@ app.get("/", (req, res) => {
 });
 
 /* =========================
-   SEND OTP
+   SEND OTP (OPTION B FIX)
+   - Respond instantly
+   - Send email in background
 ========================= */
 app.post("/send-otp", async (req, res) => {
   try {
     const { email } = req.body;
-    if (!email) return res.status(400).json({ success: false, message: "Email required" });
+    if (!email) {
+      return res.status(400).json({ success: false, message: "Email required" });
+    }
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
@@ -43,11 +47,17 @@ app.post("/send-otp", async (req, res) => {
       expires: Date.now() + 5 * 60 * 1000 // 5 minutes
     };
 
-    await resend.emails.send({
-      from: process.env.MAIL_FROM,
-      to: email,
-      subject: "Delta Market • OTP Verification Code",
-     html: `
+    // ✅ INSTANT RESPONSE (NO DELAY)
+    res.json({ success: true, message: "OTP sending..." });
+
+    // ✅ BACKGROUND EMAIL SEND (NO WAIT)
+    setImmediate(async () => {
+      try {
+        await resend.emails.send({
+          from: process.env.MAIL_FROM,
+          to: email,
+          subject: "Delta Market • OTP Verification Code",
+          html: `
 <!DOCTYPE html>
 <html>
 <head>
@@ -101,7 +111,7 @@ app.post("/send-otp", async (req, res) => {
 
               <!-- WARNING -->
               <div style="margin-top:18px; font-size:12px; color:#9ca3af; line-height:1.6;">
-                If you don’t want to Buy, Then Don't Verify .
+                If you don’t want to Buy, Then Don't Verify.
               </div>
             </td>
           </tr>
@@ -120,11 +130,15 @@ app.post("/send-otp", async (req, res) => {
   </table>
 </body>
 </html>
-`
+          `
+        });
 
+        console.log("✅ OTP sent to:", email);
+      } catch (err) {
+        console.error("❌ BACKGROUND OTP SEND ERROR:", err);
+      }
     });
 
-    res.json({ success: true });
   } catch (err) {
     console.error("SEND OTP ERROR:", err);
     res.status(500).json({ success: false, message: "Server error" });
@@ -149,7 +163,9 @@ app.post("/verify-otp", async (req, res) => {
       return res.json({ success: false, message: "OTP expired" });
     }
 
-    if (record.otp !== otp) return res.json({ success: false, message: "Wrong OTP" });
+    if (record.otp !== otp) {
+      return res.json({ success: false, message: "Wrong OTP" });
+    }
 
     delete otpStore[email];
 
@@ -278,8 +294,7 @@ async function sendReceipt(order) {
   </table>
 </body>
 </html>
-`
-
+    `
   });
 }
 
@@ -290,7 +305,9 @@ app.post("/order-done", async (req, res) => {
   try {
     const { orderId } = req.body;
     const order = orderStore[orderId];
-    if (!order) return res.status(404).json({ success: false, message: "Order not found" });
+    if (!order) {
+      return res.status(404).json({ success: false, message: "Order not found" });
+    }
 
     order.status = "completed";
     await sendReceipt(order);
@@ -378,13 +395,3 @@ app.post("/telegram-webhook", async (req, res) => {
 ========================= */
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => console.log("Running on", PORT));
-;
-app.get("/", (req, res) => {
-  res.send("Backend is running ✅");
-});
-
-
-
-
-
-
