@@ -29,6 +29,19 @@ app.get("/", (req, res) => {
 });
 
 /* =========================
+   ADMIN GET ALL ORDERS
+========================= */
+app.get("/admin/orders", (req, res) => {
+  try {
+    const orders = Object.values(orderStore);
+    res.json(orders);
+  } catch (err) {
+    res.status(500).json({ success: false });
+  }
+});
+
+
+/* =========================
    SEND OTP (OPTION B FIX)
    - Respond instantly
    - Send email in background
@@ -395,3 +408,4 @@ app.post("/telegram-webhook", async (req, res) => {
 ========================= */
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => console.log("Running on", PORT));
+
