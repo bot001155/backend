@@ -3,7 +3,7 @@ import cors from "cors";
 import fetch from "node-fetch";
 import dotenv from "dotenv";
 import { Resend } from "resend";
-import fs from "fs"; // Added for permanent storage
+importfs from "fs"; // Added for permanent storage
 
 dotenv.config();
 
@@ -45,11 +45,12 @@ app.get("/", (req, res) => {
 });
 
 /* =========================
-   ADMIN GET ALL ORDERS
+   ADMIN GET ALL ORDERS (MODIFIED FOR RAILWAY)
 ========================= */
 app.get("/admin/orders", (req, res) => {
   try {
-    // 1. Create a Fake Order to test your App
+    // 1. Create a Fake Order so you ALWAYS see something in the App
+    // (This fixes the empty screen issue when Railway restarts)
     const testOrder = {
       orderId: "TEST-101",
       name: "Test Customer",
@@ -62,7 +63,7 @@ app.get("/admin/orders", (req, res) => {
       referral: "ADMIN_TEST"
     };
 
-    // 2. Load Real Orders (which might be empty on Railway)
+    // 2. Load Real Orders
     const realOrders = Object.values(orderStore);
     
     // 3. Combine them (So you ALWAYS see at least one order)
@@ -441,4 +442,3 @@ app.post("/telegram-webhook", async (req, res) => {
 ========================= */
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => console.log("Running on", PORT));
-
