@@ -333,19 +333,26 @@ async function sendReceipt(order) {
 }
 
 /* =========================
-   ADMIN DONE API (manual call)
+   ADMIN DONE API (SAVES PROFIT NOW)
 ========================= */
 app.post("/order-done", async (req, res) => {
   try {
-    const { orderId } = req.body;
+    // 1. We now accept cost & price from the App
+    const { orderId, cost,ZF price } = req.body;
+    
     const order = orderStore[orderId];
     if (!order) {
       return res.status(404).json({ success: false, message: "Order not found" });
     }
 
+    // 2. Save these values permanently to the file
     order.status = "completed";
-    saveOrders(); // Save status update
-    await sendReceipt(order);
+    order.cost = Number(cost) || 0;   // <--- NEW: Saving Cost
+    order.price = Number(price) || 0; // <--- NEW: Saving Selling Price
+    
+    saveOrders(); // Write to orders.json
+    
+    await sendReceipt(order); // Send Email
 
     res.json({ success: true });
   } catch (err) {
@@ -442,3 +449,4 @@ app.post("/telegram-webhook", async (req, res) => {
 ========================= */
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => console.log("Running on", PORT));
+
