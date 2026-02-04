@@ -3,7 +3,7 @@ import cors from "cors";
 import fetch from "node-fetch";
 import dotenv from "dotenv";
 import { Resend } from "resend";
-importfs from "fs"; // Added for permanent storage
+import fs from "fs"; // <--- FIXED: Added space here
 
 dotenv.config();
 
