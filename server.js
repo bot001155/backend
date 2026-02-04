@@ -3,7 +3,7 @@ import cors from "cors";
 import fetch from "node-fetch";
 import dotenv from "dotenv";
 import { Resend } from "resend";
-import fs from "fs"; // <--- FIXED: Added space here
+import fs from "fs"; 
 
 dotenv.config();
 
@@ -60,7 +60,9 @@ app.get("/admin/orders", (req, res) => {
       payment: "₹500",
       time: new Date().toLocaleString(),
       platform: "Android",
-      referral: "ADMIN_TEST"
+      referral: "ADMIN_TEST",
+      cost: 100,
+      price: 500
     };
 
     // 2. Load Real Orders
@@ -214,7 +216,9 @@ app.post("/verify-otp", async (req, res) => {
       email,
       ...orderData,
       status: "pending",
-      time: new Date().toLocaleString("en-IN")
+      time: new Date().toLocaleString("en-IN"),
+      cost: 0,
+      price: 0
     };
 
     orderStore[orderId] = order;
@@ -338,7 +342,8 @@ async function sendReceipt(order) {
 app.post("/order-done", async (req, res) => {
   try {
     // 1. We now accept cost & price from the App
-    const { orderId, cost,ZF price } = req.body;
+    // FIXED: Removed "ZF" typo below
+    const { orderId, cost, price } = req.body;
     
     const order = orderStore[orderId];
     if (!order) {
@@ -449,4 +454,3 @@ app.post("/telegram-webhook", async (req, res) => {
 ========================= */
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => console.log("Running on", PORT));
-
