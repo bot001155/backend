@@ -49,8 +49,26 @@ app.get("/", (req, res) => {
 ========================= */
 app.get("/admin/orders", (req, res) => {
   try {
-    const orders = Object.values(orderStore);
-    res.json(orders);
+    // 1. Create a Fake Order to test your App
+    const testOrder = {
+      orderId: "TEST-101",
+      name: "Test Customer",
+      email: "test@demo.com",
+      status: "pending",
+      product: "Debug Product",
+      payment: "₹500",
+      time: new Date().toLocaleString(),
+      platform: "Android",
+      referral: "ADMIN_TEST"
+    };
+
+    // 2. Load Real Orders (which might be empty on Railway)
+    const realOrders = Object.values(orderStore);
+    
+    // 3. Combine them (So you ALWAYS see at least one order)
+    const allOrders = [testOrder, ...realOrders]; 
+
+    res.json(allOrders);
   } catch (err) {
     res.status(500).json({ success: false });
   }
@@ -423,3 +441,4 @@ app.post("/telegram-webhook", async (req, res) => {
 ========================= */
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => console.log("Running on", PORT));
+
