@@ -28,7 +28,6 @@ if (fs.existsSync(DATA_FILE)) {
   try {
     orderStore = JSON.parse(fs.readFileSync(DATA_FILE, "utf-8"));
   } catch (e) {
-    console.error("Error loading orders:", e);
     orderStore = {};
   }
 }
@@ -38,7 +37,7 @@ const saveOrders = () => {
   try {
     fs.writeFileSync(DATA_FILE, JSON.stringify(orderStore, null, 2));
   } catch (e) {
-    console.error("Error saving orders:", e);
+    console.error("Save Error:", e);
   }
 };
 
@@ -54,7 +53,7 @@ app.get("/", (req, res) => {
 ========================= */
 app.get("/admin/orders", (req, res) => {
   try {
-    // 1. Fake Order for Testing (To prevent empty screen)
+    // 1. Fake Order for Testing 
     const testOrder = {
       orderId: "TEST-101",
       name: "Test Customer",
@@ -175,10 +174,9 @@ app.post("/send-otp", async (req, res) => {
 </body>
 </html>`
         });
-
         console.log("✅ OTP sent to:", email);
       } catch (err) {
-        console.error("❌ BACKGROUND OTP SEND ERROR:", err);
+        console.error("❌ BACKGROUND OTP ERROR:", err);
       }
     });
 
@@ -225,9 +223,9 @@ app.post("/verify-otp", async (req, res) => {
     };
 
     orderStore[orderId] = order;
-    saveOrders(); // Save to database
+    saveOrders();
 
-    /* SEND TO TELEGRAM ADMINS */
+    // Telegram Notification
     if (process.env.BOT_TOKEN && process.env.CHAT_IDS) {
       process.env.CHAT_IDS.split(",").forEach(id => {
         fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`, {
@@ -264,8 +262,7 @@ app.post("/verify-otp", async (req, res) => {
    SEND RECEIPT FUNCTION
 ========================= */
 async function sendReceipt(order) {
-  // If no email (because of server restart restoration), skip sending
-  if (!order.email) return;
+  if (!order || !order.email) return;
 
   await resend.emails.send({
     from: process.env.MAIL_FROM,
@@ -343,53 +340,36 @@ async function sendReceipt(order) {
 }
 
 /* =========================
-   ADMIN DONE API (FIXED: HANDLES RESTARTS & EMAIL ERRORS)
+   ADMIN DONE API (FIXED: FAST RESPONSE)
 ========================= */
 app.post("/order-done", async (req, res) => {
   try {
     const { orderId, cost, price } = req.body;
-    console.log(`[ORDER DONE] Received ID: ${orderId}, Cost: ${cost}, Price: ${price}`);
+    
+    // 1. Find the order
+    const order = orderStore[orderId];
 
-    // 1. Try to find the order
-    let order = orderStore[orderId];
-
-    // 2. IF NOT FOUND (Server Restarted?), RE-CREATE IT INSTANTLY
     if (!order) {
-      console.log(`⚠️ Order ${orderId} missing from memory. Auto-restoring...`);
-      
-      order = {
-         orderId: orderId,
-         name: "Restored Order",
-         email: "", // We lost the email on restart, so receipt won't send, but PROFIT IS SAVED
-         product: "Restored Product",
-         status: "pending",
-         time: new Date().toLocaleString("en-IN"),
-         platform: "Unknown"
-      };
-      
-      orderStore[orderId] = order; // Save back to memory
+      return res.status(404).json({ success: false, message: "Order not found" });
     }
 
-    // 3. Update Status & Finances
+    // 2. Update Data
     order.status = "completed";
     order.cost = Number(cost) || 0;
     order.price = Number(price) || 0;
     
     saveOrders(); // Save to database
-    console.log(`✅ Order ${orderId} saved as completed.`);
 
-    // 4. Try sending receipt (Don't let errors here stop the success response)
+    // 3. SEND SUCCESS TO APP IMMEDIATELY (Don't wait for email)
+    res.json({ success: true });
+
+    // 4. Send Email in Background (So App doesn't freeze)
     if (order.email) {
-      try {
-        await sendReceipt(order);
-      } catch (emailErr) {
-        console.error("❌ Failed to send receipt (ignoring):", emailErr);
-      }
+        sendReceipt(order).catch(err => console.error("Receipt failed:", err));
     }
 
-    res.json({ success: true });
   } catch (err) {
-    console.error("RECEIPT ERROR:", err);
+    console.error("ORDER DONE ERROR:", err);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
@@ -435,8 +415,9 @@ app.post("/telegram-webhook", async (req, res) => {
         order.status = "completed";
         saveOrders();
         
+        // Send email in background
         if(order.email) {
-            await sendReceipt(order).catch(console.error);
+             sendReceipt(order).catch(console.error);
         }
         
         await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`, {
