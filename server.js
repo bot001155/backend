@@ -278,13 +278,66 @@ async function sendReceipt(order) {
   <meta name="supported-color-schemes" content="light dark">
 </head>
 <body style="margin:0; padding:0; background:#f4f6f8; font-family:Arial, Helvetica, sans-serif;">
-  <div style="padding:40px; text-align:center;">
-    <h1>Payment Successful</h1>
-    <p>Order ID: ${order.orderId}</p>
-    <p>Product: ${order.product}</p>
-    <p>Amount: ${order.payment}</p>
-    <p style="color:green; font-weight:bold;">COMPLETED</p>
-  </div>
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f8;">
+    <tr>
+      <td align="center" style="padding:30px 10px;">
+        <table width="100%" style="max-width:520px; background:#ffffff; border-radius:14px; overflow:hidden; border:1px solid #eaeaea;">
+          
+          <!-- Header -->
+          <tr>
+            <td style="padding:22px; background:#111; text-align:center;">
+              <img src="https://deltamarket.store/logo.png" width="70" style="border-radius:14px; display:block; margin:0 auto 10px;" />
+              <div style="color:#fff; font-size:20px; font-weight:bold;">Delta Market</div>
+              <div style="color:#cfcfcf; font-size:13px; margin-top:4px;">Payment Receipt</div>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style="padding:22px;">
+              <div style="font-size:16px; font-weight:bold; color:#111;">✅ Payment Successful</div>
+              <div style="margin-top:8px; font-size:13px; color:#555; line-height:1.5;">
+                Thank you for your purchase. Your order is completed successfully.
+              </div>
+
+              <div style="margin-top:18px; padding:14px; background:#f7f7f7; border-radius:12px;">
+                <table width="100%" style="font-size:13px; color:#222;">
+                  <tr>
+                    <td style="padding:6px 0;"><b>Order ID</b></td>
+                    <td align="right">${order.orderId}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:6px 0;"><b>Product</b></td>
+                    <td align="right">${order.product}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:6px 0;"><b>Payment</b></td>
+                    <td align="right">${order.payment}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:6px 0;"><b>Status</b></td>
+                    <td align="right" style="color:#16a34a;"><b>Completed</b></td>
+                  </tr>
+                </table>
+              </div>
+
+              <div style="margin-top:18px; font-size:12px; color:#666; line-height:1.5;">
+                Need help? Contact us at <b>deltamarket015@gmail.com</b>
+              </div>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding:14px; text-align:center; background:#fafafa; font-size:12px; color:#888;">
+              © ${new Date().getFullYear()} Delta Market • All rights reserved
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
 </body>
 </html>`
   });
@@ -408,3 +461,4 @@ app.post("/telegram-webhook", async (req, res) => {
 ========================= */
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => console.log("Running on", PORT));
+
