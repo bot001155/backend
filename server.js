@@ -45,12 +45,11 @@ app.get("/", (req, res) => {
 });
 
 /* =========================
-   ADMIN GET ALL ORDERS (MODIFIED FOR RAILWAY)
+   ADMIN GET ALL ORDERS
 ========================= */
 app.get("/admin/orders", (req, res) => {
   try {
-    // 1. Create a Fake Order so you ALWAYS see something in the App
-    // (This fixes the empty screen issue when Railway restarts)
+    // 1. Fake Order for Testing 
     const testOrder = {
       orderId: "TEST-101",
       name: "Test Customer",
@@ -68,7 +67,7 @@ app.get("/admin/orders", (req, res) => {
     // 2. Load Real Orders
     const realOrders = Object.values(orderStore);
     
-    // 3. Combine them (So you ALWAYS see at least one order)
+    // 3. Combine them
     const allOrders = [testOrder, ...realOrders]; 
 
     res.json(allOrders);
@@ -208,8 +207,7 @@ app.post("/verify-otp", async (req, res) => {
 
     delete otpStore[email];
 
-    const orderId =
-      "DM-" + Math.random().toString(36).substring(2, 8).toUpperCase();
+    const orderId = "DM-" + Math.random().toString(36).substring(2, 8).toUpperCase();
 
     const order = {
       orderId,
@@ -222,9 +220,8 @@ app.post("/verify-otp", async (req, res) => {
     };
 
     orderStore[orderId] = order;
-    saveOrders(); // Save to database
+    saveOrders();
 
-    /* SEND TO TELEGRAM ADMINS */
     if (process.env.BOT_TOKEN && process.env.CHAT_IDS) {
       process.env.CHAT_IDS.split(",").forEach(id => {
         fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`, {
@@ -232,19 +229,7 @@ app.post("/verify-otp", async (req, res) => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             chat_id: id.trim(),
-            text:
-`🛒 NEW ORDER
-
-🆔 Order ID: ${orderId}
-👤 Name: ${order.name}
-📦 Product: ${order.product}
-📧 Email: ${order.email}
-💳 Payment: ${order.payment}
-📲 Platform: ${order.platform}
-🎟 Referral: ${order.referral || "None"}
-🕒 Date & Time: ${order.time}
-
-(Admin: send /done ${orderId})`
+            text: `🛒 NEW ORDER\n🆔 ${orderId}\n👤 ${order.name}\n📦 ${order.product}`
           })
         }).catch(() => {});
       });
@@ -337,12 +322,10 @@ async function sendReceipt(order) {
 }
 
 /* =========================
-   ADMIN DONE API (SAVES PROFIT NOW)
+   ADMIN DONE API (SAVES PROFIT)
 ========================= */
 app.post("/order-done", async (req, res) => {
   try {
-    // 1. We now accept cost & price from the App
-    // FIXED: Removed "ZF" typo below
     const { orderId, cost, price } = req.body;
     
     const order = orderStore[orderId];
@@ -350,14 +333,12 @@ app.post("/order-done", async (req, res) => {
       return res.status(404).json({ success: false, message: "Order not found" });
     }
 
-    // 2. Save these values permanently to the file
     order.status = "completed";
-    order.cost = Number(cost) || 0;   // <--- NEW: Saving Cost
-    order.price = Number(price) || 0; // <--- NEW: Saving Selling Price
+    order.cost = Number(cost) || 0;
+    order.price = Number(price) || 0;
     
-    saveOrders(); // Write to orders.json
-    
-    await sendReceipt(order); // Send Email
+    saveOrders(); 
+    await sendReceipt(order);
 
     res.json({ success: true });
   } catch (err) {
@@ -373,14 +354,14 @@ app.delete("/delete-order/:id", (req, res) => {
   const { id } = req.params;
   if (orderStore[id]) {
     delete orderStore[id];
-    saveOrders(); // Remove permanently from database
+    saveOrders();
     return res.json({ success: true, message: "Order removed" });
   }
   res.status(404).json({ success: false });
 });
 
 /* =========================
-   TELEGRAM WEBHOOK (LISTEN /done)
+   TELEGRAM WEBHOOK
 ========================= */
 app.post("/telegram-webhook", async (req, res) => {
   try {
@@ -402,49 +383,22 @@ app.post("/telegram-webhook", async (req, res) => {
     if (text.startsWith("/done")) {
       const parts = text.trim().split(" ");
       const orderId = parts[1];
-
-      if (!orderId) {
+      if (orderId && orderStore[orderId]) {
+        const order = orderStore[orderId];
+        order.status = "completed";
+        saveOrders();
+        await sendReceipt(order);
+        
         await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            chat_id: chatId,
-            text: "❌ Use like: /done DM-XXXXXX"
-          })
+          body: JSON.stringify({ chat_id: chatId, text: `✅ Order ${orderId} Completed!` })
         });
-        return res.sendStatus(200);
       }
-
-      const order = orderStore[orderId];
-      if (!order) {
-        await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            chat_id: chatId,
-            text: `❌ Order not found: ${orderId}`
-          })
-        });
-        return res.sendStatus(200);
-      }
-
-      order.status = "completed";
-      saveOrders(); // Save update
-      await sendReceipt(order);
-
-      await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chat_id: chatId,
-          text: `✅ Done! Receipt sent to ${order.email}\n🆔 Order: ${orderId}`
-        })
-      });
     }
-
     res.sendStatus(200);
   } catch (err) {
-    console.error("TELEGRAM WEBHOOK ERROR:", err);
+    console.error("TELEGRAM ERROR:", err);
     res.sendStatus(200);
   }
 });
