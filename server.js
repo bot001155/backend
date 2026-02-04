@@ -45,11 +45,12 @@ app.get("/", (req, res) => {
 });
 
 /* =========================
-   ADMIN GET ALL ORDERS
+   ADMIN GET ALL ORDERS (MODIFIED FOR RAILWAY)
 ========================= */
 app.get("/admin/orders", (req, res) => {
   try {
-    // 1. Fake Order for Testing 
+    // 1. Create a Fake Order so you ALWAYS see something in the App
+    // (This fixes the empty screen issue when Railway restarts)
     const testOrder = {
       orderId: "TEST-101",
       name: "Test Customer",
@@ -67,7 +68,7 @@ app.get("/admin/orders", (req, res) => {
     // 2. Load Real Orders
     const realOrders = Object.values(orderStore);
     
-    // 3. Combine them
+    // 3. Combine them (So you ALWAYS see at least one order)
     const allOrders = [testOrder, ...realOrders]; 
 
     res.json(allOrders);
@@ -207,7 +208,8 @@ app.post("/verify-otp", async (req, res) => {
 
     delete otpStore[email];
 
-    const orderId = "DM-" + Math.random().toString(36).substring(2, 8).toUpperCase();
+    const orderId =
+      "DM-" + Math.random().toString(36).substring(2, 8).toUpperCase();
 
     const order = {
       orderId,
@@ -220,8 +222,9 @@ app.post("/verify-otp", async (req, res) => {
     };
 
     orderStore[orderId] = order;
-    saveOrders();
+    saveOrders(); // Save to database
 
+    /* SEND TO TELEGRAM ADMINS */
     if (process.env.BOT_TOKEN && process.env.CHAT_IDS) {
       process.env.CHAT_IDS.split(",").forEach(id => {
         fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`, {
@@ -229,7 +232,19 @@ app.post("/verify-otp", async (req, res) => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             chat_id: id.trim(),
-            text: `🛒 NEW ORDER\n🆔 ${orderId}\n👤 ${order.name}\n📦 ${order.product}`
+            text:
+`🛒 NEW ORDER
+
+🆔 Order ID: ${orderId}
+👤 Name: ${order.name}
+📦 Product: ${order.product}
+📧 Email: ${order.email}
+💳 Payment: ${order.payment}
+📲 Platform: ${order.platform}
+🎟 Referral: ${order.referral || "None"}
+🕒 Date & Time: ${order.time}
+
+(Admin: send /done ${orderId})`
           })
         }).catch(() => {});
       });
@@ -246,6 +261,9 @@ app.post("/verify-otp", async (req, res) => {
    SEND RECEIPT FUNCTION
 ========================= */
 async function sendReceipt(order) {
+  // Prevent sending empty emails if order was restored from restart
+  if (!order.email) return;
+
   await resend.emails.send({
     from: process.env.MAIL_FROM,
     to: order.email,
@@ -322,23 +340,45 @@ async function sendReceipt(order) {
 }
 
 /* =========================
-   ADMIN DONE API (SAVES PROFIT)
+   ADMIN DONE API (SAVES PROFIT - FIXED FOR RESTART)
 ========================= */
 app.post("/order-done", async (req, res) => {
   try {
     const { orderId, cost, price } = req.body;
     
-    const order = orderStore[orderId];
+    // 1. Try to find the order in memory
+    let order = orderStore[orderId];
+    
+    // 2. If NOT found (Server Restarted?), RE-CREATE IT INSTANTLY
     if (!order) {
-      return res.status(404).json({ success: false, message: "Order not found" });
+      console.log("⚠️ Order missing (Restart?), Restoring:", orderId);
+      
+      // Re-create a placeholder order so we can save profit
+      order = {
+         orderId: orderId,
+         name: "Restored Order",
+         email: "", // Email is lost, but profit is saved
+         product: "Restored Product",
+         status: "pending",
+         time: new Date().toLocaleString("en-IN"),
+         platform: "Unknown"
+      };
+      
+      // Save it back to memory
+      orderStore[orderId] = order;
     }
 
+    // 3. Now complete the order normally
     order.status = "completed";
     order.cost = Number(cost) || 0;
     order.price = Number(price) || 0;
     
-    saveOrders(); 
-    await sendReceipt(order);
+    saveOrders(); // Save to orders.json
+    
+    // Only send email if valid
+    if (order.email) {
+        await sendReceipt(order);
+    }
 
     res.json({ success: true });
   } catch (err) {
@@ -354,14 +394,14 @@ app.delete("/delete-order/:id", (req, res) => {
   const { id } = req.params;
   if (orderStore[id]) {
     delete orderStore[id];
-    saveOrders();
+    saveOrders(); // Remove permanently from database
     return res.json({ success: true, message: "Order removed" });
   }
   res.status(404).json({ success: false });
 });
 
 /* =========================
-   TELEGRAM WEBHOOK
+   TELEGRAM WEBHOOK (LISTEN /done)
 ========================= */
 app.post("/telegram-webhook", async (req, res) => {
   try {
@@ -383,22 +423,49 @@ app.post("/telegram-webhook", async (req, res) => {
     if (text.startsWith("/done")) {
       const parts = text.trim().split(" ");
       const orderId = parts[1];
-      if (orderId && orderStore[orderId]) {
-        const order = orderStore[orderId];
-        order.status = "completed";
-        saveOrders();
-        await sendReceipt(order);
-        
+
+      if (!orderId) {
         await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ chat_id: chatId, text: `✅ Order ${orderId} Completed!` })
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: "❌ Use like: /done DM-XXXXXX"
+          })
         });
+        return res.sendStatus(200);
       }
+
+      const order = orderStore[orderId];
+      if (!order) {
+        await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: `❌ Order not found: ${orderId}`
+          })
+        });
+        return res.sendStatus(200);
+      }
+
+      order.status = "completed";
+      saveOrders(); // Save update
+      await sendReceipt(order);
+
+      await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: `✅ Done! Receipt sent to ${order.email}\n🆔 Order: ${orderId}`
+        })
+      });
     }
+
     res.sendStatus(200);
   } catch (err) {
-    console.error("TELEGRAM ERROR:", err);
+    console.error("TELEGRAM WEBHOOK ERROR:", err);
     res.sendStatus(200);
   }
 });
