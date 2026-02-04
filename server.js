@@ -28,6 +28,7 @@ if (fs.existsSync(DATA_FILE)) {
   try {
     orderStore = JSON.parse(fs.readFileSync(DATA_FILE, "utf-8"));
   } catch (e) {
+    console.error("Failed to load orders:", e);
     orderStore = {};
   }
 }
@@ -37,7 +38,7 @@ const saveOrders = () => {
   try {
     fs.writeFileSync(DATA_FILE, JSON.stringify(orderStore, null, 2));
   } catch (e) {
-    console.error("Save Error:", e);
+    console.error("Failed to save orders:", e);
   }
 };
 
@@ -277,99 +278,69 @@ async function sendReceipt(order) {
   <meta name="supported-color-schemes" content="light dark">
 </head>
 <body style="margin:0; padding:0; background:#f4f6f8; font-family:Arial, Helvetica, sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f8;">
-    <tr>
-      <td align="center" style="padding:30px 10px;">
-        <table width="100%" style="max-width:520px; background:#ffffff; border-radius:14px; overflow:hidden; border:1px solid #eaeaea;">
-          
-          <tr>
-            <td style="padding:22px; background:#111; text-align:center;">
-              <img src="https://deltamarket.store/logo.png" width="70" style="border-radius:14px; display:block; margin:0 auto 10px;" />
-              <div style="color:#fff; font-size:20px; font-weight:bold;">Delta Market</div>
-              <div style="color:#cfcfcf; font-size:13px; margin-top:4px;">Payment Receipt</div>
-            </td>
-          </tr>
-
-          <tr>
-            <td style="padding:22px;">
-              <div style="font-size:16px; font-weight:bold; color:#111;">✅ Payment Successful</div>
-              <div style="margin-top:8px; font-size:13px; color:#555; line-height:1.5;">
-                Thank you for your purchase. Your order is completed successfully.
-              </div>
-
-              <div style="margin-top:18px; padding:14px; background:#f7f7f7; border-radius:12px;">
-                <table width="100%" style="font-size:13px; color:#222;">
-                  <tr>
-                    <td style="padding:6px 0;"><b>Order ID</b></td>
-                    <td align="right">${order.orderId}</td>
-                  </tr>
-                  <tr>
-                    <td style="padding:6px 0;"><b>Product</b></td>
-                    <td align="right">${order.product}</td>
-                  </tr>
-                  <tr>
-                    <td style="padding:6px 0;"><b>Payment</b></td>
-                    <td align="right">${order.payment}</td>
-                  </tr>
-                  <tr>
-                    <td style="padding:6px 0;"><b>Status</b></td>
-                    <td align="right" style="color:#16a34a;"><b>Completed</b></td>
-                  </tr>
-                </table>
-              </div>
-
-              <div style="margin-top:18px; font-size:12px; color:#666; line-height:1.5;">
-                Need help? Contact us at <b>deltamarket015@gmail.com</b>
-              </div>
-            </td>
-          </tr>
-
-          <tr>
-            <td style="padding:14px; text-align:center; background:#fafafa; font-size:12px; color:#888;">
-              © ${new Date().getFullYear()} Delta Market • All rights reserved
-            </td>
-          </tr>
-
-        </table>
-      </td>
-    </tr>
-  </table>
+  <div style="padding:40px; text-align:center;">
+    <h1>Payment Successful</h1>
+    <p>Order ID: ${order.orderId}</p>
+    <p>Product: ${order.product}</p>
+    <p>Amount: ${order.payment}</p>
+    <p style="color:green; font-weight:bold;">COMPLETED</p>
+  </div>
 </body>
 </html>`
   });
 }
 
 /* =========================
-   ADMIN DONE API (FIXED: FAST RESPONSE)
+   ADMIN DONE API (FIXED: MISMATCH & FAST RESPONSE)
 ========================= */
 app.post("/order-done", async (req, res) => {
   try {
-    const { orderId, cost, price } = req.body;
-    
-    // 1. Find the order
-    const order = orderStore[orderId];
+    // 1. FIX: Check both "orderId" AND "id" to prevent mismatch
+    let { orderId, id, cost, price } = req.body;
+    let targetId = orderId || id; // Use whichever one exists
 
-    if (!order) {
-      return res.status(404).json({ success: false, message: "Order not found" });
+    console.log("RECEIVED /order-done:", req.body); // Log for debugging
+
+    if (!targetId) {
+      return res.status(400).json({ success: false, message: "Missing Order ID" });
     }
 
-    // 2. Update Data
+    targetId = String(targetId).trim(); // Remove spaces
+
+    // 2. Find the order (Handle missing/restart case)
+    let order = orderStore[targetId];
+
+    if (!order) {
+      console.log(`⚠️ Order ${targetId} missing. Auto-restoring to save profit...`);
+      order = {
+         orderId: targetId,
+         name: "Restored Order",
+         email: "", 
+         product: "Restored Product",
+         status: "pending",
+         time: new Date().toLocaleString("en-IN"),
+         platform: "Unknown"
+      };
+      orderStore[targetId] = order;
+    }
+
+    // 3. Update Data
     order.status = "completed";
     order.cost = Number(cost) || 0;
     order.price = Number(price) || 0;
     
-    saveOrders(); // Save to database
+    saveOrders(); // Save immediately
 
-    // 3. SEND SUCCESS TO APP IMMEDIATELY (Don't wait for email)
+    // 4. RESPOND SUCCESS FIRST (So app doesn't hang)
     res.json({ success: true });
 
-    // 4. Send Email in Background (So App doesn't freeze)
+    // 5. Send Receipt in background
     if (order.email) {
-        sendReceipt(order).catch(err => console.error("Receipt failed:", err));
+      sendReceipt(order).catch(err => console.error("Receipt error:", err));
     }
 
   } catch (err) {
-    console.error("ORDER DONE ERROR:", err);
+    console.error("ORDER DONE FATAL ERROR:", err);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
@@ -382,7 +353,6 @@ app.delete("/delete-order/:id", (req, res) => {
   if (orderStore[id]) {
     delete orderStore[id];
     saveOrders();
-    return res.json({ success: true, message: "Order removed" });
   }
   res.json({ success: true, message: "Order removed" });
 });
@@ -415,7 +385,6 @@ app.post("/telegram-webhook", async (req, res) => {
         order.status = "completed";
         saveOrders();
         
-        // Send email in background
         if(order.email) {
              sendReceipt(order).catch(console.error);
         }
