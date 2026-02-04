@@ -28,13 +28,18 @@ if (fs.existsSync(DATA_FILE)) {
   try {
     orderStore = JSON.parse(fs.readFileSync(DATA_FILE, "utf-8"));
   } catch (e) {
+    console.error("Error loading orders:", e);
     orderStore = {};
   }
 }
 
 // Function to save orders to file permanently
 const saveOrders = () => {
-  fs.writeFileSync(DATA_FILE, JSON.stringify(orderStore, null, 2));
+  try {
+    fs.writeFileSync(DATA_FILE, JSON.stringify(orderStore, null, 2));
+  } catch (e) {
+    console.error("Error saving orders:", e);
+  }
 };
 
 /* =========================
@@ -49,7 +54,7 @@ app.get("/", (req, res) => {
 ========================= */
 app.get("/admin/orders", (req, res) => {
   try {
-    // 1. Fake Order for Testing 
+    // 1. Fake Order for Testing (To prevent empty screen)
     const testOrder = {
       orderId: "TEST-101",
       name: "Test Customer",
@@ -220,8 +225,9 @@ app.post("/verify-otp", async (req, res) => {
     };
 
     orderStore[orderId] = order;
-    saveOrders();
+    saveOrders(); // Save to database
 
+    /* SEND TO TELEGRAM ADMINS */
     if (process.env.BOT_TOKEN && process.env.CHAT_IDS) {
       process.env.CHAT_IDS.split(",").forEach(id => {
         fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`, {
@@ -229,8 +235,7 @@ app.post("/verify-otp", async (req, res) => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             chat_id: id.trim(),
-            // --- EXACT FORMAT YOU REQUESTED ---
-            text: 
+            text:
 `🛒 NEW ORDER
 
 🆔 Order ID: ${orderId}
@@ -259,6 +264,7 @@ app.post("/verify-otp", async (req, res) => {
    SEND RECEIPT FUNCTION
 ========================= */
 async function sendReceipt(order) {
+  // If no email (because of server restart restoration), skip sending
   if (!order.email) return;
 
   await resend.emails.send({
@@ -337,41 +343,48 @@ async function sendReceipt(order) {
 }
 
 /* =========================
-   ADMIN DONE API (FIXED: Handles Restart / Missing Orders)
+   ADMIN DONE API (FIXED: HANDLES RESTARTS & EMAIL ERRORS)
 ========================= */
 app.post("/order-done", async (req, res) => {
   try {
     const { orderId, cost, price } = req.body;
-    
+    console.log(`[ORDER DONE] Received ID: ${orderId}, Cost: ${cost}, Price: ${price}`);
+
     // 1. Try to find the order
     let order = orderStore[orderId];
-    
+
     // 2. IF NOT FOUND (Server Restarted?), RE-CREATE IT INSTANTLY
     if (!order) {
-      console.log("⚠️ Order missing (Restart?), Restoring:", orderId);
+      console.log(`⚠️ Order ${orderId} missing from memory. Auto-restoring...`);
       
       order = {
          orderId: orderId,
          name: "Restored Order",
-         email: "", // Email lost, but we can still save profit
+         email: "", // We lost the email on restart, so receipt won't send, but PROFIT IS SAVED
          product: "Restored Product",
          status: "pending",
          time: new Date().toLocaleString("en-IN"),
          platform: "Unknown"
       };
       
-      orderStore[orderId] = order; // Save it back to memory
+      orderStore[orderId] = order; // Save back to memory
     }
 
-    // 3. Complete the order
+    // 3. Update Status & Finances
     order.status = "completed";
     order.cost = Number(cost) || 0;
     order.price = Number(price) || 0;
     
-    saveOrders(); 
-    
+    saveOrders(); // Save to database
+    console.log(`✅ Order ${orderId} saved as completed.`);
+
+    // 4. Try sending receipt (Don't let errors here stop the success response)
     if (order.email) {
+      try {
         await sendReceipt(order);
+      } catch (emailErr) {
+        console.error("❌ Failed to send receipt (ignoring):", emailErr);
+      }
     }
 
     res.json({ success: true });
@@ -391,7 +404,6 @@ app.delete("/delete-order/:id", (req, res) => {
     saveOrders();
     return res.json({ success: true, message: "Order removed" });
   }
-  // Return success even if missing so app removes it
   res.json({ success: true, message: "Order removed" });
 });
 
@@ -422,7 +434,10 @@ app.post("/telegram-webhook", async (req, res) => {
         const order = orderStore[orderId];
         order.status = "completed";
         saveOrders();
-        await sendReceipt(order);
+        
+        if(order.email) {
+            await sendReceipt(order).catch(console.error);
+        }
         
         await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`, {
           method: "POST",
