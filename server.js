@@ -3,6 +3,7 @@ import cors from "cors";
 import fetch from "node-fetch";
 import dotenv from "dotenv";
 import { Resend } from "resend";
+import fs from "fs"; // Added for permanent storage
 
 dotenv.config();
 
@@ -16,16 +17,31 @@ app.use(express.json());
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 /* =========================
-   TEMP IN-MEMORY STORES
+   STORAGE SETUP
 ========================= */
-const otpStore = {};    // { email: { otp, expires } }
-const orderStore = {};  // { orderId: order }
+const DATA_FILE = "./orders.json"; // Permanent storage file
+const otpStore = {};    // OTPs remain temporary in memory
+
+// Load orders from file on startup
+let orderStore = {};
+if (fs.existsSync(DATA_FILE)) {
+  try {
+    orderStore = JSON.parse(fs.readFileSync(DATA_FILE, "utf-8"));
+  } catch (e) {
+    orderStore = {};
+  }
+}
+
+// Function to save orders to file permanently
+const saveOrders = () => {
+  fs.writeFileSync(DATA_FILE, JSON.stringify(orderStore, null, 2));
+};
 
 /* =========================
    HEALTH CHECK
 ========================= */
 app.get("/", (req, res) => {
-  res.send("✅ Backend running");
+  res.send("✅ Backend running with File Storage");
 });
 
 /* =========================
@@ -40,11 +56,8 @@ app.get("/admin/orders", (req, res) => {
   }
 });
 
-
 /* =========================
-   SEND OTP (OPTION B FIX)
-   - Respond instantly
-   - Send email in background
+   SEND OTP
 ========================= */
 app.post("/send-otp", async (req, res) => {
   try {
@@ -60,10 +73,8 @@ app.post("/send-otp", async (req, res) => {
       expires: Date.now() + 5 * 60 * 1000 // 5 minutes
     };
 
-    // ✅ INSTANT RESPONSE (NO DELAY)
     res.json({ success: true, message: "OTP sending..." });
 
-    // ✅ BACKGROUND EMAIL SEND (NO WAIT)
     setImmediate(async () => {
       try {
         await resend.emails.send({
@@ -86,7 +97,6 @@ app.post("/send-otp", async (req, res) => {
         
         <table width="100%" style="max-width:520px; background:#111827; border-radius:16px; overflow:hidden; border:1px solid rgba(255,255,255,0.08);">
           
-          <!-- HEADER -->
           <tr>
             <td style="padding:22px; text-align:center; background:#0f172a;">
               <img src="https://deltamarket.store/logo.png" width="70"
@@ -101,7 +111,6 @@ app.post("/send-otp", async (req, res) => {
             </td>
           </tr>
 
-          <!-- BODY -->
           <tr>
             <td style="padding:22px;">
               <div style="color:#ffffff; font-size:16px; font-weight:700;">
@@ -112,7 +121,6 @@ app.post("/send-otp", async (req, res) => {
                 Use the OTP below to verify your email and complete your order.
               </div>
 
-              <!-- OTP BOX -->
               <div style="margin-top:18px; padding:16px; background:#0b1220; border-radius:14px; text-align:center; border:1px solid rgba(255,255,255,0.08);">
                 <div style="font-size:30px; font-weight:800; letter-spacing:8px; color:#ffffff;">
                   ${otp}
@@ -122,14 +130,12 @@ app.post("/send-otp", async (req, res) => {
                 </div>
               </div>
 
-              <!-- WARNING -->
               <div style="margin-top:18px; font-size:12px; color:#9ca3af; line-height:1.6;">
                 If you don’t want to Buy, Then Don't Verify.
               </div>
             </td>
           </tr>
 
-          <!-- FOOTER -->
           <tr>
             <td style="padding:14px; text-align:center; background:#0f172a; font-size:12px; color:#6b7280;">
               © ${new Date().getFullYear()} Delta Market • Secure Checkout
@@ -142,8 +148,7 @@ app.post("/send-otp", async (req, res) => {
     </tr>
   </table>
 </body>
-</html>
-          `
+</html>`
         });
 
         console.log("✅ OTP sent to:", email);
@@ -194,6 +199,7 @@ app.post("/verify-otp", async (req, res) => {
     };
 
     orderStore[orderId] = order;
+    saveOrders(); // Save to database
 
     /* SEND TO TELEGRAM ADMINS */
     if (process.env.BOT_TOKEN && process.env.CHAT_IDS) {
@@ -250,7 +256,6 @@ async function sendReceipt(order) {
       <td align="center" style="padding:30px 10px;">
         <table width="100%" style="max-width:520px; background:#ffffff; border-radius:14px; overflow:hidden; border:1px solid #eaeaea;">
           
-          <!-- Header -->
           <tr>
             <td style="padding:22px; background:#111; text-align:center;">
               <img src="https://deltamarket.store/logo.png" width="70" style="border-radius:14px; display:block; margin:0 auto 10px;" />
@@ -259,7 +264,6 @@ async function sendReceipt(order) {
             </td>
           </tr>
 
-          <!-- Body -->
           <tr>
             <td style="padding:22px;">
               <div style="font-size:16px; font-weight:bold; color:#111;">✅ Payment Successful</div>
@@ -294,7 +298,6 @@ async function sendReceipt(order) {
             </td>
           </tr>
 
-          <!-- Footer -->
           <tr>
             <td style="padding:14px; text-align:center; background:#fafafa; font-size:12px; color:#888;">
               © ${new Date().getFullYear()} Delta Market • All rights reserved
@@ -306,8 +309,7 @@ async function sendReceipt(order) {
     </tr>
   </table>
 </body>
-</html>
-    `
+</html>`
   });
 }
 
@@ -323,6 +325,7 @@ app.post("/order-done", async (req, res) => {
     }
 
     order.status = "completed";
+    saveOrders(); // Save status update
     await sendReceipt(order);
 
     res.json({ success: true });
@@ -330,6 +333,19 @@ app.post("/order-done", async (req, res) => {
     console.error("RECEIPT ERROR:", err);
     res.status(500).json({ success: false, message: "Server error" });
   }
+});
+
+/* =========================
+   DELETE ORDER API
+========================= */
+app.delete("/delete-order/:id", (req, res) => {
+  const { id } = req.params;
+  if (orderStore[id]) {
+    delete orderStore[id];
+    saveOrders(); // Remove permanently from database
+    return res.json({ success: true, message: "Order removed" });
+  }
+  res.status(404).json({ success: false });
 });
 
 /* =========================
@@ -343,7 +359,6 @@ app.post("/telegram-webhook", async (req, res) => {
 
     if (!chatId) return res.sendStatus(200);
 
-    // Only allow admin chat ids
     const allowedAdmins = (process.env.CHAT_IDS || "")
       .split(",")
       .map(x => x.trim())
@@ -353,7 +368,6 @@ app.post("/telegram-webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
-    // Command: /done DM-XXXXXX
     if (text.startsWith("/done")) {
       const parts = text.trim().split(" ");
       const orderId = parts[1];
@@ -384,6 +398,7 @@ app.post("/telegram-webhook", async (req, res) => {
       }
 
       order.status = "completed";
+      saveOrders(); // Save update
       await sendReceipt(order);
 
       await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`, {
@@ -408,4 +423,3 @@ app.post("/telegram-webhook", async (req, res) => {
 ========================= */
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => console.log("Running on", PORT));
-
